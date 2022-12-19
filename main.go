@@ -59,6 +59,7 @@ func main() {
 
 	})
 
+	// By default, web scrapper will extract quote from page 1 to 2.
 	for pageNum := 1; pageNum <= 2; pageNum++ {
 		url := fmt.Sprintf("https://quotes.toscrape.com/page/%d", pageNum)
 		c.Visit(url)
