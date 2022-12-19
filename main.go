@@ -3,17 +3,20 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"os"
 	"path/filepath"
 	"regexp"
+	"strings"
 
 	"github.com/gocolly/colly"
 )
 
 type Quote struct {
-	QuoteText string `json:"quoteText"`
+	QuoteText string   `json:"quoteText"`
+	Author    string   `json:"author"`
+	AuthorUrl string   `json:"authorUrl"`
+	Tag       []string `json:"tags"`
 }
 
 func main() {
@@ -27,19 +30,36 @@ func main() {
 
 	// Extract Quote file
 	// TODO: Try to get author as well
-	c.OnHTML(".quote span.text", func(e *colly.HTMLElement) {
+	c.OnHTML("div.quote", func(e *colly.HTMLElement) {
 
-		// Remove special character from string
-		trimmedString := regexp.MustCompile(`[^a-zA-Z0-9,. ]+`).ReplaceAllString(e.Text, "")
+		// Use span.text as iteration condition to record every quote element.
+		e.ForEach("span.text", func(i int, ne *colly.HTMLElement) {
+			tags := make([]string, 0)
 
-		quote := Quote{
-			QuoteText: trimmedString,
-		}
-		quotes = append(quotes, quote)
+			// Remove special character from string
+			trimmedString := regexp.MustCompile(`[^a-zA-Z0-9,.'-;!? ]+`).ReplaceAllString(ne.Text, "")
+
+			// Same level as span.text
+			// span --> small.author (small attribute with author as class name and child of span)
+			author := e.ChildText("span small.author")
+			authorUrl := fmt.Sprintf("https://quotes.toscrape.com%s", e.ChildAttr("span a", "href"))
+
+			e.ForEach("div.tags a.tag", func(j int, tagText *colly.HTMLElement) {
+				tags = append(tags, tagText.Text)
+			})
+
+			quote := Quote{
+				QuoteText: strings.TrimSpace(trimmedString),
+				Author:    author,
+				AuthorUrl: authorUrl,
+				Tag:       tags,
+			}
+			quotes = append(quotes, quote)
+		})
+
 	})
 
-	for i := 0; i <= 1; i++ {
-		pageNum := i + 1
+	for pageNum := 1; pageNum <= 2; pageNum++ {
 		url := fmt.Sprintf("https://quotes.toscrape.com/page/%d", pageNum)
 		c.Visit(url)
 	}
@@ -74,7 +94,7 @@ func writeJson(data []Quote) {
 
 	fName := fmt.Sprintf("%s/quote.json", folderName)
 	// Create file if not yet exist
-	err = ioutil.WriteFile(fName, json, 0644)
+	err = os.WriteFile(fName, json, 0644)
 
 	if err != nil {
 		log.Fatalf("Cannot create file %q: %s\n", fName, err)
